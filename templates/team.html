@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+{% block title %}Team - DeskHive{% endblock %}
+
+{% block body %}
+<nav class="container-fluid">
+    <ul><li><strong>DeskHive</strong></li></ul>
+    <ul>
+        <li><a href="/">Dashboard</a></li>
+        <li><a href="/tickets">Tickets</a></li>
+        <li><a href="/team" class="contrast">Team</a></li>
+        <li><a href="/settings">Settings</a></li>
+        <li><a href="#" id="logoutBtn">Logout</a></li>
+    </ul>
+</nav>
+
+<main class="container">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+        <h1 style="margin:0;">Team</h1>
+        <button id="inviteBtn" class="contrast">+ Einladen</button>
+    </div>
+
+    <table role="grid">
+        <thead>
+            <tr><th>Name</th><th>E-Mail</th><th>Rolle</th><th>Status</th><th>Aktionen</th></tr>
+        </thead>
+        <tbody id="teamList">
+            <tr><td colspan="5" style="text-align:center;">Lade...</td></tr>
+        </tbody>
+    </table>
+
+    <dialog id="inviteDialog">
+        <article style="min-width:400px;">
+            <header><h3>Teammitglied einladen</h3></header>
+            <form id="inviteForm">
+                <label>E-Mail
+                    <input type="email" name="email" required>
+                </label>
+                <label>Rolle
+                    <select name="role">
+                        <option value="agent">Agent</option>
+                        <option value="admin">Admin</option>
+                    </select>
+                </label>
+                <div id="inviteError" style="color:var(--pico-color-red-500); display:none;"></div>
+                <div id="inviteSuccess" style="color:green; display:none;"></div>
+                <footer style="display:flex;gap:0.5rem;justify-content:flex-end;">
+                    <button type="button" class="outline" onclick="document.getElementById('inviteDialog').close()">Schliessen</button>
+                    <button type="submit">Einladen</button>
+                </footer>
+            </form>
+        </article>
+    </dialog>
+</main>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const token = localStorage.getItem('access_token');
+if (!token) window.location.href = '/login';
+
+const roleLabels = {owner:'Owner', admin:'Admin', agent:'Agent'};
+
+async function apiFetch(url, opts = {}) {
+    opts.headers = {...(opts.headers || {}), 'Authorization': 'Bearer ' + token};
+    const res = await fetch(url, opts);
+    if (res.status === 401) { localStorage.removeItem('access_token'); window.location.href = '/login'; }
+    return res;
+}
+
+async function loadTeam() {
+    const res = await apiFetch('/api/users');
+    const users = await res.json();
+    const tbody = document.getElementById('teamList');
+
+    tbody.innerHTML = users.map(u => `
+        <tr>
+            <td>${u.name}</td>
+            <td>${u.email}</td>
+            <td>${roleLabels[u.role] || u.role}</td>
+            <td>${u.is_active ? 'Aktiv' : 'Deaktiviert'}</td>
+            <td>
+                ${u.role !== 'owner' && u.is_active ? `<button class="outline secondary" style="padding:0.25rem 0.5rem; font-size:0.8rem;" onclick="deactivateUser('${u.id}')">Deaktivieren</button>` : ''}
+            </td>
+        </tr>
+    `).join('');
+}
+
+async function deactivateUser(userId) {
+    if (!confirm('Benutzer wirklich deaktivieren?')) return;
+    await apiFetch(`/api/users/${userId}`, {method: 'DELETE'});
+    loadTeam();
+}
+
+document.getElementById('inviteBtn').addEventListener('click', () => {
+    document.getElementById('inviteDialog').showModal();
+});
+
+document.getElementById('inviteForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const form = e.target;
+    const errEl = document.getElementById('inviteError');
+    const successEl = document.getElementById('inviteSuccess');
+    errEl.style.display = 'none';
+    successEl.style.display = 'none';
+
+    const res = await apiFetch('/api/users/invite', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            email: form.email.value,
+            role: form.role.value,
+        }),
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+        errEl.textContent = data.detail || 'Fehler';
+        errEl.style.display = 'block';
+        return;
+    }
+
+    successEl.textContent = 'Einladung gesendet!';
+    successEl.style.display = 'block';
+    form.reset();
+});
+
+document.getElementById('logoutBtn').addEventListener('click', async (e) => {
+    e.preventDefault();
+    await fetch('/api/auth/logout', {method: 'POST'});
+    localStorage.removeItem('access_token');
+    window.location.href = '/login';
+});
+
+loadTeam();
+</script>
+{% endblock %}

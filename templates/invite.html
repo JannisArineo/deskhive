@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Einladung annehmen - DeskHive{% endblock %}
+
+{% block body %}
+<main class="container">
+    <article style="max-width:450px; margin:80px auto;">
+        <header>
+            <h2>DeskHive</h2>
+            <p>Einladung annehmen</p>
+        </header>
+        <form id="acceptForm">
+            <input type="hidden" id="token" value="{{ token }}">
+            <label>Dein Name
+                <input type="text" id="name" required placeholder="Max Mustermann">
+            </label>
+            <label>Passwort
+                <input type="password" id="password" required placeholder="Mind. 8 Zeichen" minlength="8">
+            </label>
+            <div id="error" style="color:var(--pico-color-red-500); display:none;"></div>
+            <button type="submit">Account erstellen</button>
+        </form>
+    </article>
+</main>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.getElementById('acceptForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const errEl = document.getElementById('error');
+    errEl.style.display = 'none';
+
+    const btn = e.target.querySelector('button');
+    btn.setAttribute('aria-busy', 'true');
+
+    try {
+        const res = await fetch('/api/users/accept-invite', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                token: document.getElementById('token').value,
+                name: document.getElementById('name').value,
+                password: document.getElementById('password').value,
+            }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+            errEl.textContent = data.detail || 'Fehler';
+            errEl.style.display = 'block';
+            return;
+        }
+        window.location.href = '/login';
+    } catch (err) {
+        errEl.textContent = 'Verbindungsfehler';
+        errEl.style.display = 'block';
+    } finally {
+        btn.removeAttribute('aria-busy');
+    }
+});
+</script>
+{% endblock %}
