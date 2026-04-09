@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+{% block title %}Billing - DeskHive{% endblock %}
+
+{% block body %}
+<nav class="container-fluid">
+    <ul><li><strong>DeskHive</strong></li></ul>
+    <ul>
+        <li><a href="/">Dashboard</a></li>
+        <li><a href="/tickets">Tickets</a></li>
+        <li><a href="/team">Team</a></li>
+        <li><a href="/settings">Settings</a></li>
+        <li><a href="#" id="logoutBtn">Logout</a></li>
+    </ul>
+</nav>
+
+<main class="container">
+    <h1>Billing</h1>
+
+    <article id="currentPlan" style="margin-bottom:2rem;">
+        <header>Aktueller Plan</header>
+        <div id="planInfo">Lade...</div>
+    </article>
+
+    <h2>Verfuegbare Plaene</h2>
+    <div class="grid" id="planCards"></div>
+</main>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const token = localStorage.getItem('access_token');
+if (!token) window.location.href = '/login';
+
+async function apiFetch(url, opts = {}) {
+    opts.headers = {...(opts.headers || {}), 'Authorization': 'Bearer ' + token};
+    const res = await fetch(url, opts);
+    if (res.status === 401) { localStorage.removeItem('access_token'); window.location.href = '/login'; }
+    return res;
+}
+
+const params = new URLSearchParams(window.location.search);
+if (params.get('success')) {
+    alert('Upgrade erfolgreich! Dein Plan wurde aktiviert.');
+    history.replaceState({}, '', '/billing');
+}
+
+async function loadBilling() {
+    const [currentRes, plansRes] = await Promise.all([
+        apiFetch('/api/billing/current'),
+        apiFetch('/api/billing/plans'),
+    ]);
+    const current = await currentRes.json();
+    const plans = await plansRes.json();
+
+    document.getElementById('planInfo').innerHTML = `
+        <p><strong>${current.name}</strong> &mdash; ${current.price === 0 ? 'Kostenlos' : current.price + '€/Monat'}</p>
+        <p>Max. Agents: ${current.max_agents === 999 ? 'Unbegrenzt' : current.max_agents}</p>
+        ${current.stripe_subscription_id ? `<button onclick="manageSubscription()" class="outline">Abo verwalten (Stripe)</button>` : ''}
+    `;
+
+    const cards = Object.entries(plans).map(([key, p]) => `
+        <article style="text-align:center;">
+            <header><h3>${p.name}</h3></header>
+            <p style="font-size:2rem;font-weight:bold;">${p.price === 0 ? 'Kostenlos' : p.price + '€'}<small style="font-size:1rem;font-weight:normal;">${p.price > 0 ? '/Mo' : ''}</small></p>
+            <ul style="text-align:left; list-style:none; padding:0;">
+                ${p.features.map(f => `<li>&#x2713; ${f}</li>`).join('')}
+            </ul>
+            ${key === current.plan
+                ? '<button disabled>Aktueller Plan</button>'
+                : key !== 'free' ? `<button onclick="upgradeTo('${key}')">Upgraden</button>` : ''}
+        </article>
+    `).join('');
+
+    document.getElementById('planCards').innerHTML = cards;
+}
+
+async function upgradeTo(plan) {
+    const res = await apiFetch('/api/billing/checkout', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({plan}),
+    });
+    if (!res.ok) {
+        const d = await res.json();
+        alert(d.detail || 'Fehler beim Checkout');
+        return;
+    }
+    const {checkout_url} = await res.json();
+    window.location.href = checkout_url;
+}
+
+async function manageSubscription() {
+    const res = await apiFetch('/api/billing/portal', {method: 'POST'});
+    if (!res.ok) { alert('Fehler'); return; }
+    const {portal_url} = await res.json();
+    window.location.href = portal_url;
+}
+
+document.getElementById('logoutBtn').addEventListener('click', async (e) => {
+    e.preventDefault();
+    await fetch('/api/auth/logout', {method: 'POST'});
+    localStorage.removeItem('access_token');
+    window.location.href = '/login';
+});
+
+loadBilling();
+</script>
+{% endblock %}

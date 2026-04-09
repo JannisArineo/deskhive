@@ -6,6 +6,10 @@ from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, Asyn
 
 from app.database import Base, get_db
 from app.main import app
+from app.middleware import security as sec_module
+
+# disable rate limiting in tests
+sec_module.is_rate_limited = lambda *args, **kwargs: False
 
 # use SQLite for tests (no postgres needed)
 TEST_DB_URL = "sqlite+aiosqlite:///./test.db"

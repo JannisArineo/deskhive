@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% block title %}Settings - DeskHive{% endblock %}
+
+{% block body %}
+<nav class="container-fluid">
+    <ul><li><strong>DeskHive</strong></li></ul>
+    <ul>
+        <li><a href="/">Dashboard</a></li>
+        <li><a href="/tickets">Tickets</a></li>
+        <li><a href="/team">Team</a></li>
+        <li><a href="/settings" class="contrast">Settings</a></li>
+        <li><a href="#" id="logoutBtn">Logout</a></li>
+    </ul>
+</nav>
+
+<main class="container" style="max-width:700px;">
+    <h1>Settings</h1>
+
+    <article>
+        <header><h3>Workspace</h3></header>
+        <form id="settingsForm">
+            <label>Firmenname
+                <input type="text" id="name" required>
+            </label>
+            <label>Portal-Farbe
+                <input type="color" id="primary_color" value="#6366f1">
+            </label>
+            <label>Widget-Begruessung
+                <input type="text" id="widget_greeting" placeholder="Wie koennen wir helfen?">
+            </label>
+            <div id="settingsSuccess" style="color:green; display:none;">Gespeichert!</div>
+            <button type="submit">Speichern</button>
+        </form>
+    </article>
+
+    <article>
+        <header><h3>Widget-Code</h3></header>
+        <p>Fuege diesen Code in deine Website ein:</p>
+        <pre id="widgetCode" style="background:var(--pico-code-background);padding:1rem;border-radius:4px;overflow-x:auto;"></pre>
+        <button class="outline" onclick="copyCode()">Code kopieren</button>
+    </article>
+
+    <article>
+        <header><h3>Plan</h3></header>
+        <p id="planInfo">Lade...</p>
+        <a href="/billing">Plan verwalten &rarr;</a>
+    </article>
+</main>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const token = localStorage.getItem('access_token');
+if (!token) window.location.href = '/login';
+
+async function apiFetch(url, opts = {}) {
+    opts.headers = {...(opts.headers || {}), 'Authorization': 'Bearer ' + token};
+    const res = await fetch(url, opts);
+    if (res.status === 401) { localStorage.removeItem('access_token'); window.location.href = '/login'; }
+    return res;
+}
+
+async function loadSettings() {
+    const [tenantRes, planRes] = await Promise.all([
+        apiFetch('/api/tenants/current'),
+        apiFetch('/api/billing/current'),
+    ]);
+    const tenant = await tenantRes.json();
+    const plan = await planRes.json();
+
+    document.getElementById('name').value = tenant.name;
+    document.getElementById('primary_color').value = tenant.settings?.primary_color || '#6366f1';
+    document.getElementById('widget_greeting').value = tenant.settings?.widget_greeting || '';
+
+    document.getElementById('planInfo').textContent = `Aktueller Plan: ${plan.name} (${plan.max_agents === 999 ? 'Unbegrenzte' : plan.max_agents} Agents)`;
+
+    const slug = tenant.slug;
+    const code = `<script src="${window.location.origin}/api/widget/embed.js" data-tenant="${slug}"><\/script>`;
+    document.getElementById('widgetCode').textContent = code;
+}
+
+function copyCode() {
+    navigator.clipboard.writeText(document.getElementById('widgetCode').textContent);
+    alert('Code kopiert!');
+}
+
+document.getElementById('settingsForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    document.getElementById('settingsSuccess').style.display = 'none';
+
+    await apiFetch('/api/tenants/current', {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            name: document.getElementById('name').value,
+            settings: {
+                primary_color: document.getElementById('primary_color').value,
+                widget_greeting: document.getElementById('widget_greeting').value,
+            },
+        }),
+    });
+
+    document.getElementById('settingsSuccess').style.display = 'block';
+    setTimeout(() => document.getElementById('settingsSuccess').style.display = 'none', 3000);
+});
+
+document.getElementById('logoutBtn').addEventListener('click', async (e) => {
+    e.preventDefault();
+    await fetch('/api/auth/logout', {method: 'POST'});
+    localStorage.removeItem('access_token');
+    window.location.href = '/login';
+});
+
+loadSettings();
+</script>
+{% endblock %}
