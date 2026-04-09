@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+{% block title %}Support - DeskHive{% endblock %}
+
+{% block body %}
+<main class="container" style="max-width: 600px; margin-top: 40px;">
+    <article>
+        <header>
+            <h2 id="companyName">Support</h2>
+            <p>Wie koennen wir dir helfen?</p>
+        </header>
+        <form id="submitForm">
+            <label>Deine E-Mail
+                <input type="email" id="email" required placeholder="dein@email.de">
+            </label>
+            <label>Dein Name
+                <input type="text" id="name" placeholder="Optional">
+            </label>
+            <label>Betreff
+                <input type="text" id="subject" required placeholder="Kurze Beschreibung">
+            </label>
+            <label>Beschreibung
+                <textarea id="body" required rows="5" placeholder="Was ist passiert?"></textarea>
+            </label>
+            <label>Prioritaet
+                <select id="priority">
+                    <option value="low">Niedrig</option>
+                    <option value="medium" selected>Mittel</option>
+                    <option value="high">Hoch</option>
+                    <option value="urgent">Dringend</option>
+                </select>
+            </label>
+            <div id="error" style="color:var(--pico-color-red-500); display:none;"></div>
+            <button type="submit">Ticket einreichen</button>
+        </form>
+        <footer>
+            <p>Bereits ein Ticket erstellt? <a href="/portal/{{ slug }}/track">Ticket verfolgen</a></p>
+        </footer>
+    </article>
+
+    <!-- Success -->
+    <article id="successBox" style="display:none;">
+        <header><h3>Ticket eingereicht!</h3></header>
+        <p>Deine Ticket-Nummer: <strong id="ticketNum"></strong></p>
+        <p>Speichere diesen Link, um dein Ticket zu verfolgen:</p>
+        <p><a id="trackLink" href="#">Ticket verfolgen</a></p>
+        <p style="color:var(--pico-muted-color); font-size:0.875rem;">Bewahre deinen Zugangs-Token auf -- du brauchst ihn, um deine Tickets einzusehen.</p>
+    </article>
+</main>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const slug = '{{ slug }}';
+
+async function loadInfo() {
+    const res = await fetch(`/api/portal/${slug}/info`);
+    if (res.ok) {
+        const data = await res.json();
+        document.getElementById('companyName').textContent = data.name + ' Support';
+    }
+}
+
+document.getElementById('submitForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const errEl = document.getElementById('error');
+    errEl.style.display = 'none';
+
+    const btn = e.target.querySelector('button');
+    btn.setAttribute('aria-busy', 'true');
+
+    try {
+        const res = await fetch(`/api/portal/${slug}/tickets`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                email: document.getElementById('email').value,
+                name: document.getElementById('name').value || null,
+                subject: document.getElementById('subject').value,
+                body: document.getElementById('body').value,
+                priority: document.getElementById('priority').value,
+            }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+            errEl.textContent = data.detail || 'Fehler';
+            errEl.style.display = 'block';
+            return;
+        }
+
+        // success
+        document.getElementById('submitForm').parentElement.style.display = 'none';
+        document.getElementById('successBox').style.display = 'block';
+        document.getElementById('ticketNum').textContent = '#' + data.ticket_number;
+        const trackUrl = `/portal/${slug}/track?token=${data.customer_token}`;
+        document.getElementById('trackLink').href = trackUrl;
+
+        // save token for convenience
+        localStorage.setItem(`deskhive_portal_${slug}_token`, data.customer_token);
+    } catch (err) {
+        errEl.textContent = 'Verbindungsfehler';
+        errEl.style.display = 'block';
+    } finally {
+        btn.removeAttribute('aria-busy');
+    }
+});
+
+loadInfo();
+</script>
+{% endblock %}

@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+{% block title %}Meine Tickets - DeskHive{% endblock %}
+
+{% block body %}
+<main class="container" style="max-width: 700px; margin-top: 40px;">
+    <article id="tokenForm">
+        <header>
+            <h2 id="companyName">Support</h2>
+            <p>Gib deinen Zugangs-Token ein, um deine Tickets zu sehen.</p>
+        </header>
+        <form id="authForm">
+            <input type="text" id="tokenInput" placeholder="Dein Token" required>
+            <button type="submit">Tickets anzeigen</button>
+        </form>
+        <footer>
+            <a href="/portal/{{ slug }}">Neues Ticket einreichen</a>
+        </footer>
+    </article>
+
+    <!-- Ticket List -->
+    <div id="ticketSection" style="display:none;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+            <h2 id="companyName2">Meine Tickets</h2>
+            <a href="/portal/{{ slug }}">+ Neues Ticket</a>
+        </div>
+        <div id="ticketList"></div>
+    </div>
+
+    <!-- Ticket Detail -->
+    <div id="ticketDetail" style="display:none;">
+        <a href="#" id="backToList">&lt; Zurueck</a>
+        <h2 id="detailSubject"></h2>
+        <p id="detailMeta" style="color:var(--pico-muted-color);"></p>
+        <div id="messageList" style="margin:1rem 0;"></div>
+        <form id="replyForm">
+            <textarea id="replyBody" rows="3" placeholder="Antwort schreiben..." required></textarea>
+            <button type="submit">Antworten</button>
+        </form>
+    </div>
+</main>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const slug = '{{ slug }}';
+let customerToken = new URLSearchParams(window.location.search).get('token')
+    || localStorage.getItem(`deskhive_portal_${slug}_token`)
+    || '';
+
+const statusLabels = {open:'Offen', in_progress:'In Bearbeitung', waiting:'Wartend', resolved:'Geloest', closed:'Geschlossen'};
+
+async function loadInfo() {
+    const res = await fetch(`/api/portal/${slug}/info`);
+    if (res.ok) {
+        const data = await res.json();
+        document.getElementById('companyName').textContent = data.name + ' Support';
+        document.getElementById('companyName2').textContent = data.name + ' - Meine Tickets';
+    }
+}
+
+async function loadTickets() {
+    const res = await fetch(`/api/portal/${slug}/tickets?token=${customerToken}`);
+    if (!res.ok) { showTokenForm(); return; }
+    const tickets = await res.json();
+
+    document.getElementById('tokenForm').style.display = 'none';
+    document.getElementById('ticketSection').style.display = 'block';
+    document.getElementById('ticketDetail').style.display = 'none';
+
+    const container = document.getElementById('ticketList');
+    if (tickets.length === 0) {
+        container.innerHTML = '<p>Noch keine Tickets.</p>';
+        return;
+    }
+
+    container.innerHTML = tickets.map(t => `
+        <article style="cursor:pointer; padding:0.75rem 1rem; margin-bottom:0.5rem;" onclick="loadDetail('${t.id}')">
+            <div style="display:flex; justify-content:space-between;">
+                <strong>#${t.ticket_number} ${t.subject}</strong>
+                <small>${statusLabels[t.status] || t.status}</small>
+            </div>
+            <small style="color:var(--pico-muted-color);">${new Date(t.created_at).toLocaleDateString('de-DE')}</small>
+        </article>
+    `).join('');
+}
+
+async function loadDetail(ticketId) {
+    const res = await fetch(`/api/portal/${slug}/tickets/${ticketId}?token=${customerToken}`);
+    if (!res.ok) return;
+    const t = await res.json();
+
+    document.getElementById('ticketSection').style.display = 'none';
+    document.getElementById('ticketDetail').style.display = 'block';
+
+    document.getElementById('detailSubject').textContent = `#${t.ticket_number} ${t.subject}`;
+    document.getElementById('detailMeta').textContent = `${statusLabels[t.status] || t.status} · ${new Date(t.created_at).toLocaleString('de-DE')}`;
+
+    document.getElementById('messageList').innerHTML = t.messages.map(m => `
+        <article style="padding:0.75rem 1rem; margin-bottom:0.5rem;
+            border-left: 3px solid ${m.author_type === 'agent' ? 'var(--pico-primary)' : 'var(--pico-muted-border-color)'};">
+            <small style="color:var(--pico-muted-color);">
+                ${m.author_type === 'agent' ? 'Support' : 'Du'} · ${new Date(m.created_at).toLocaleString('de-DE')}
+            </small>
+            <p style="margin:0.25rem 0 0 0; white-space:pre-wrap;">${m.body}</p>
+        </article>
+    `).join('');
+
+    // reply form
+    document.getElementById('replyForm').onsubmit = async (e) => {
+        e.preventDefault();
+        const body = document.getElementById('replyBody').value;
+        await fetch(`/api/portal/${slug}/tickets/${ticketId}/reply?token=${customerToken}`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({body}),
+        });
+        document.getElementById('replyBody').value = '';
+        loadDetail(ticketId);
+    };
+}
+
+function showTokenForm() {
+    document.getElementById('tokenForm').style.display = 'block';
+    document.getElementById('ticketSection').style.display = 'none';
+    document.getElementById('ticketDetail').style.display = 'none';
+}
+
+document.getElementById('authForm').addEventListener('submit', (e) => {
+    e.preventDefault();
+    customerToken = document.getElementById('tokenInput').value;
+    localStorage.setItem(`deskhive_portal_${slug}_token`, customerToken);
+    loadTickets();
+});
+
+document.getElementById('backToList').addEventListener('click', (e) => {
+    e.preventDefault();
+    loadTickets();
+});
+
+if (customerToken) {
+    document.getElementById('tokenInput').value = customerToken;
+    loadTickets();
+}
+
+loadInfo();
+</script>
+{% endblock %}
