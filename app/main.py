@@ -5,7 +5,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse, RedirectResponse
 
-from app.routers import auth, tickets, portal, users
+from app.routers import auth, tickets, portal, users, dashboard, widget
 from app.middleware.auth_middleware import get_current_user
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -20,6 +20,8 @@ app.include_router(auth.router)
 app.include_router(tickets.router)
 app.include_router(portal.router)
 app.include_router(users.router)
+app.include_router(dashboard.router)
+app.include_router(widget.router)
 
 
 # --- page routes ---

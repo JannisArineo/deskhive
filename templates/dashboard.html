@@ -1,13 +1,15 @@
 {% extends "base.html" %}
 {% block title %}Dashboard - DeskHive{% endblock %}
 
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+{% endblock %}
+
 {% block body %}
 <nav class="container-fluid">
+    <ul><li><strong>DeskHive</strong></li></ul>
     <ul>
-        <li><strong>DeskHive</strong></li>
-    </ul>
-    <ul>
-        <li><a href="/">Dashboard</a></li>
+        <li><a href="/" class="contrast">Dashboard</a></li>
         <li><a href="/tickets">Tickets</a></li>
         <li><a href="/team">Team</a></li>
         <li><a href="/settings">Settings</a></li>
@@ -17,20 +19,34 @@
 
 <main class="container">
     <h1>Dashboard</h1>
-    <p id="welcomeMsg">Willkommen!</p>
 
     <div class="grid">
-        <article>
-            <header>Offene Tickets</header>
+        <article style="text-align:center;">
+            <header>Offen</header>
             <h2 id="openCount">-</h2>
         </article>
-        <article>
+        <article style="text-align:center;">
             <header>In Bearbeitung</header>
             <h2 id="progressCount">-</h2>
         </article>
-        <article>
+        <article style="text-align:center;">
             <header>Heute geloest</header>
             <h2 id="resolvedCount">-</h2>
+        </article>
+        <article style="text-align:center;">
+            <header>Gesamt</header>
+            <h2 id="totalCount">-</h2>
+        </article>
+    </div>
+
+    <div class="grid">
+        <article>
+            <header>Tickets (letzte 30 Tage)</header>
+            <canvas id="trendsChart" height="200"></canvas>
+        </article>
+        <article>
+            <header>Agent Workload</header>
+            <div id="agentList" style="min-height:200px;"></div>
         </article>
     </div>
 </main>
@@ -41,20 +57,63 @@
 const token = localStorage.getItem('access_token');
 if (!token) window.location.href = '/login';
 
-async function loadProfile() {
-    try {
-        const res = await fetch('/api/auth/me', {
-            headers: {'Authorization': 'Bearer ' + token}
-        });
-        if (res.status === 401) {
-            localStorage.removeItem('access_token');
-            window.location.href = '/login';
-            return;
-        }
-    } catch (err) {}
+async function apiFetch(url) {
+    const res = await fetch(url, {headers: {'Authorization': 'Bearer ' + token}});
+    if (res.status === 401) { localStorage.removeItem('access_token'); window.location.href = '/login'; }
+    return res;
 }
 
-loadProfile();
+async function loadOverview() {
+    const res = await apiFetch('/api/dashboard/overview');
+    const d = await res.json();
+    document.getElementById('openCount').textContent = d.open;
+    document.getElementById('progressCount').textContent = d.in_progress;
+    document.getElementById('resolvedCount').textContent = d.resolved_today;
+    document.getElementById('totalCount').textContent = d.total;
+}
+
+async function loadTrends() {
+    const res = await apiFetch('/api/dashboard/trends');
+    const data = await res.json();
+
+    const labels = data.map(d => d.date.slice(5)); // MM-DD
+    const created = data.map(d => d.created);
+    const resolved = data.map(d => d.resolved);
+
+    new Chart(document.getElementById('trendsChart'), {
+        type: 'line',
+        data: {
+            labels,
+            datasets: [
+                {label: 'Erstellt', data: created, borderColor: '#6366f1', tension: 0.3, fill: false},
+                {label: 'Geloest', data: resolved, borderColor: '#22c55e', tension: 0.3, fill: false},
+            ],
+        },
+        options: {
+            responsive: true,
+            plugins: {legend: {position: 'bottom'}},
+            scales: {y: {beginAtZero: true, ticks: {stepSize: 1}}},
+        },
+    });
+}
+
+async function loadAgents() {
+    const res = await apiFetch('/api/dashboard/agents');
+    const agents = await res.json();
+    const container = document.getElementById('agentList');
+
+    if (agents.length === 0) {
+        container.innerHTML = '<p>Keine Agents.</p>';
+        return;
+    }
+
+    container.innerHTML = agents.map(a => `
+        <div style="display:flex; justify-content:space-between; padding:0.5rem 0; border-bottom:1px solid var(--pico-muted-border-color);">
+            <span>${a.name}</span>
+            <strong>${a.open_tickets} Tickets</strong>
+        </div>
+    `).join('');
+}
 
 document.getElementById('logoutBtn').addEventListener('click', async (e) => {
     e.preventDefault();
@@ -62,5 +121,9 @@ document.getElementById('logoutBtn').addEventListener('click', async (e) => {
     localStorage.removeItem('access_token');
     window.location.href = '/login';
 });
+
+loadOverview();
+loadTrends();
+loadAgents();
 </script>
 {% endblock %}
