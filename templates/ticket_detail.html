@@ -1,0 +1,151 @@
+{% extends "base.html" %}
+{% block title %}Ticket - DeskHive{% endblock %}
+
+{% block body %}
+<nav class="container-fluid">
+    <ul><li><strong>DeskHive</strong></li></ul>
+    <ul>
+        <li><a href="/">Dashboard</a></li>
+        <li><a href="/tickets">Tickets</a></li>
+        <li><a href="/team">Team</a></li>
+        <li><a href="/settings">Settings</a></li>
+        <li><a href="#" id="logoutBtn">Logout</a></li>
+    </ul>
+</nav>
+
+<main class="container">
+    <a href="/tickets">&lt; Zurueck zur Liste</a>
+
+    <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-top:1rem;">
+        <div>
+            <h1 id="ticketSubject" style="margin-bottom:0.25rem;">Lade...</h1>
+            <p id="ticketMeta" style="color:var(--pico-muted-color);"></p>
+        </div>
+        <div style="display:flex; gap:0.5rem;">
+            <select id="statusSelect" style="width:auto;"></select>
+            <select id="prioSelect" style="width:auto;"></select>
+        </div>
+    </div>
+
+    <!-- Messages -->
+    <div id="messageList" style="margin-top:1rem;"></div>
+
+    <!-- Reply Form -->
+    <article style="margin-top:1rem;">
+        <form id="replyForm">
+            <textarea id="replyBody" rows="3" placeholder="Antwort schreiben..." required></textarea>
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <label style="margin:0;">
+                    <input type="checkbox" id="replyInternal" role="switch"> Interne Notiz
+                </label>
+                <button type="submit">Senden</button>
+            </div>
+        </form>
+    </article>
+</main>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const token = localStorage.getItem('access_token');
+if (!token) window.location.href = '/login';
+const ticketId = '{{ ticket_id }}';
+
+const statusLabels = {open:'Offen', in_progress:'In Bearbeitung', waiting:'Wartend', resolved:'Geloest', closed:'Geschlossen'};
+const prioLabels = {low:'Niedrig', medium:'Mittel', high:'Hoch', urgent:'Dringend'};
+
+async function apiFetch(url, opts = {}) {
+    opts.headers = {...(opts.headers || {}), 'Authorization': 'Bearer ' + token};
+    const res = await fetch(url, opts);
+    if (res.status === 401) { localStorage.removeItem('access_token'); window.location.href = '/login'; }
+    return res;
+}
+
+function renderMessages(messages) {
+    const container = document.getElementById('messageList');
+    container.innerHTML = messages.map(m => {
+        const isInternal = m.is_internal;
+        const isAgent = m.author_type === 'agent';
+        const bgColor = isInternal ? 'var(--pico-mark-background-color)' : '';
+        const label = isInternal ? ' (Interne Notiz)' : '';
+        const align = isAgent ? 'border-left: 3px solid var(--pico-primary);' : 'border-left: 3px solid var(--pico-muted-border-color);';
+        const time = new Date(m.created_at).toLocaleString('de-DE');
+        return `
+            <article style="padding:0.75rem 1rem; ${align} background:${bgColor}; margin-bottom:0.5rem;">
+                <small style="color:var(--pico-muted-color);">
+                    ${isAgent ? 'Agent' : 'Kunde'}${label} &middot; ${time}
+                </small>
+                <p style="margin:0.25rem 0 0 0; white-space:pre-wrap;">${m.body}</p>
+            </article>
+        `;
+    }).join('');
+}
+
+async function loadTicket() {
+    const res = await apiFetch(`/api/tickets/${ticketId}`);
+    if (!res.ok) { window.location.href = '/tickets'; return; }
+    const t = await res.json();
+
+    document.getElementById('ticketSubject').textContent = `#${t.ticket_number} ${t.subject}`;
+    document.getElementById('ticketMeta').textContent =
+        `${t.customer_email || 'Unbekannt'} · ${t.source} · ${new Date(t.created_at).toLocaleString('de-DE')}`;
+
+    // status select
+    const statusSel = document.getElementById('statusSelect');
+    statusSel.innerHTML = Object.entries(statusLabels).map(([k,v]) =>
+        `<option value="${k}" ${k === t.status ? 'selected' : ''}>${v}</option>`
+    ).join('');
+
+    // prio select
+    const prioSel = document.getElementById('prioSelect');
+    prioSel.innerHTML = Object.entries(prioLabels).map(([k,v]) =>
+        `<option value="${k}" ${k === t.priority ? 'selected' : ''}>${v}</option>`
+    ).join('');
+
+    renderMessages(t.messages || []);
+}
+
+document.getElementById('statusSelect').addEventListener('change', async (e) => {
+    await apiFetch(`/api/tickets/${ticketId}`, {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({status: e.target.value}),
+    });
+});
+
+document.getElementById('prioSelect').addEventListener('change', async (e) => {
+    await apiFetch(`/api/tickets/${ticketId}`, {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({priority: e.target.value}),
+    });
+});
+
+document.getElementById('replyForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const body = document.getElementById('replyBody').value;
+    const isInternal = document.getElementById('replyInternal').checked;
+
+    const res = await apiFetch(`/api/tickets/${ticketId}/messages`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({body, is_internal: isInternal}),
+    });
+
+    if (res.ok) {
+        document.getElementById('replyBody').value = '';
+        document.getElementById('replyInternal').checked = false;
+        loadTicket();
+    }
+});
+
+document.getElementById('logoutBtn').addEventListener('click', async (e) => {
+    e.preventDefault();
+    await fetch('/api/auth/logout', {method: 'POST'});
+    localStorage.removeItem('access_token');
+    window.location.href = '/login';
+});
+
+loadTicket();
+</script>
+{% endblock %}

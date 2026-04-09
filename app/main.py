@@ -5,7 +5,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse, RedirectResponse
 
-from app.routers import auth
+from app.routers import auth, tickets
 from app.middleware.auth_middleware import get_current_user
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -17,6 +17,7 @@ templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
 # routers
 app.include_router(auth.router)
+app.include_router(tickets.router)
 
 
 # --- page routes ---
@@ -34,6 +35,16 @@ async def login_page(request: Request):
 @app.get("/register", response_class=HTMLResponse)
 async def register_page(request: Request):
     return templates.TemplateResponse("register.html", {"request": request})
+
+
+@app.get("/tickets", response_class=HTMLResponse)
+async def tickets_page(request: Request):
+    return templates.TemplateResponse("tickets.html", {"request": request})
+
+
+@app.get("/tickets/{ticket_id}", response_class=HTMLResponse)
+async def ticket_detail_page(request: Request, ticket_id: str):
+    return templates.TemplateResponse("ticket_detail.html", {"request": request, "ticket_id": ticket_id})
 
 
 @app.get("/health")
