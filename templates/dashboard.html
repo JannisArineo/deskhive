@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}Dashboard - DeskHive{% endblock %}
+
+{% block body %}
+<nav class="container-fluid">
+    <ul>
+        <li><strong>DeskHive</strong></li>
+    </ul>
+    <ul>
+        <li><a href="/">Dashboard</a></li>
+        <li><a href="/tickets">Tickets</a></li>
+        <li><a href="/team">Team</a></li>
+        <li><a href="/settings">Settings</a></li>
+        <li><a href="#" id="logoutBtn">Logout</a></li>
+    </ul>
+</nav>
+
+<main class="container">
+    <h1>Dashboard</h1>
+    <p id="welcomeMsg">Willkommen!</p>
+
+    <div class="grid">
+        <article>
+            <header>Offene Tickets</header>
+            <h2 id="openCount">-</h2>
+        </article>
+        <article>
+            <header>In Bearbeitung</header>
+            <h2 id="progressCount">-</h2>
+        </article>
+        <article>
+            <header>Heute geloest</header>
+            <h2 id="resolvedCount">-</h2>
+        </article>
+    </div>
+</main>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const token = localStorage.getItem('access_token');
+if (!token) window.location.href = '/login';
+
+async function loadProfile() {
+    try {
+        const res = await fetch('/api/auth/me', {
+            headers: {'Authorization': 'Bearer ' + token}
+        });
+        if (res.status === 401) {
+            localStorage.removeItem('access_token');
+            window.location.href = '/login';
+            return;
+        }
+    } catch (err) {}
+}
+
+loadProfile();
+
+document.getElementById('logoutBtn').addEventListener('click', async (e) => {
+    e.preventDefault();
+    await fetch('/api/auth/logout', {method: 'POST'});
+    localStorage.removeItem('access_token');
+    window.location.href = '/login';
+});
+</script>
+{% endblock %}

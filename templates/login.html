@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}Login - DeskHive{% endblock %}
+
+{% block body %}
+<main class="container">
+    <article style="max-width: 450px; margin: 80px auto;">
+        <header>
+            <h2>DeskHive</h2>
+            <p>Melde dich an</p>
+        </header>
+        <form id="loginForm">
+            <label for="email">E-Mail</label>
+            <input type="email" id="email" name="email" required placeholder="dein@email.de">
+
+            <label for="password">Passwort</label>
+            <input type="password" id="password" name="password" required placeholder="Passwort">
+
+            <div id="error" style="color: var(--pico-color-red-500); display: none; margin-bottom: 1rem;"></div>
+
+            <button type="submit">Anmelden</button>
+        </form>
+        <footer>
+            <p>Noch kein Account? <a href="/register">Jetzt registrieren</a></p>
+        </footer>
+    </article>
+</main>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.getElementById('loginForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const email = document.getElementById('email').value;
+    const password = document.getElementById('password').value;
+    const errorEl = document.getElementById('error');
+    errorEl.style.display = 'none';
+
+    const btn = e.target.querySelector('button');
+    btn.setAttribute('aria-busy', 'true');
+
+    try {
+        const res = await fetch('/api/auth/login', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({email, password}),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+            errorEl.textContent = data.detail || 'Login fehlgeschlagen';
+            errorEl.style.display = 'block';
+            return;
+        }
+        localStorage.setItem('access_token', data.access_token);
+        window.location.href = '/';
+    } catch (err) {
+        errorEl.textContent = 'Verbindungsfehler';
+        errorEl.style.display = 'block';
+    } finally {
+        btn.removeAttribute('aria-busy');
+    }
+});
+</script>
+{% endblock %}

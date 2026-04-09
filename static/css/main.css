@@ -1,0 +1,30 @@
+/* DeskHive custom styles */
+
+:root {
+    --dh-primary: #6366f1;
+    --dh-primary-hover: #4f46e5;
+}
+
+[data-theme="light"] {
+    --pico-primary: var(--dh-primary);
+    --pico-primary-hover: var(--dh-primary-hover);
+}
+
+nav {
+    border-bottom: 1px solid var(--pico-muted-border-color);
+    padding: 0.5rem 0;
+}
+
+article header {
+    font-size: 0.875rem;
+    color: var(--pico-muted-color);
+}
+
+.grid article {
+    text-align: center;
+}
+
+.grid article h2 {
+    margin: 0;
+    font-size: 2.5rem;
+}

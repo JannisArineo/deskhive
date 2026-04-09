@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block title %}Registrieren - DeskHive{% endblock %}
+
+{% block body %}
+<main class="container">
+    <article style="max-width: 450px; margin: 80px auto;">
+        <header>
+            <h2>DeskHive</h2>
+            <p>Erstelle deinen Workspace</p>
+        </header>
+        <form id="registerForm">
+            <label for="company_name">Firmenname</label>
+            <input type="text" id="company_name" name="company_name" required placeholder="Deine Firma GmbH">
+
+            <label for="name">Dein Name</label>
+            <input type="text" id="name" name="name" required placeholder="Max Mustermann">
+
+            <label for="email">E-Mail</label>
+            <input type="email" id="email" name="email" required placeholder="dein@email.de">
+
+            <label for="password">Passwort</label>
+            <input type="password" id="password" name="password" required placeholder="Mind. 8 Zeichen" minlength="8">
+
+            <div id="error" style="color: var(--pico-color-red-500); display: none; margin-bottom: 1rem;"></div>
+
+            <button type="submit">Workspace erstellen</button>
+        </form>
+        <footer>
+            <p>Schon einen Account? <a href="/login">Anmelden</a></p>
+        </footer>
+    </article>
+</main>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.getElementById('registerForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const errorEl = document.getElementById('error');
+    errorEl.style.display = 'none';
+
+    const btn = e.target.querySelector('button');
+    btn.setAttribute('aria-busy', 'true');
+
+    const body = {
+        company_name: document.getElementById('company_name').value,
+        name: document.getElementById('name').value,
+        email: document.getElementById('email').value,
+        password: document.getElementById('password').value,
+    };
+
+    try {
+        const res = await fetch('/api/auth/register', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(body),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+            errorEl.textContent = data.detail || 'Registrierung fehlgeschlagen';
+            errorEl.style.display = 'block';
+            return;
+        }
+        localStorage.setItem('access_token', data.access_token);
+        window.location.href = '/';
+    } catch (err) {
+        errorEl.textContent = 'Verbindungsfehler';
+        errorEl.style.display = 'block';
+    } finally {
+        btn.removeAttribute('aria-busy');
+    }
+});
+</script>
+{% endblock %}
